@@ -109,62 +109,47 @@ class homebrew (
 
   $homebrew_directories = [
     '/usr/local/bin',
+    '/usr/local/Caskroom',
+    '/usr/local/Cellar',
     '/usr/local/etc',
+    '/usr/local/Homebrew',
     '/usr/local/include',
+    '/usr/local/Frameworks',
     '/usr/local/lib',
+    '/usr/local/manpages',
+    '/usr/local/opt',
     '/usr/local/lib/pkgconfig',
     '/usr/local/Library',
     '/usr/local/sbin',
     '/usr/local/share',
     '/usr/local/var',
     '/usr/local/var/log',
-    '/usr/local/share/locale',
-    '/usr/local/share/man',
-    '/usr/local/share/man/man1',
-    '/usr/local/share/man/man2',
-    '/usr/local/share/man/man3',
-    '/usr/local/share/man/man4',
-    '/usr/local/share/man/man5',
-    '/usr/local/share/man/man6',
-    '/usr/local/share/man/man7',
-    '/usr/local/share/man/man8',
-    '/usr/local/share/info',
-    '/usr/local/share/doc',
-    '/usr/local/share/aclocal',
-    '/Library/Caches/Homebrew',
-    '/Library/Logs/Homebrew',
+    '/usr/local/var/homebrew',
   ]
-
-  # Ensure the group, user, and home directory exist
-  ensure_resource('group', $group, {'ensure' => 'present'})
-  if $user != 'root' {
-    ensure_resource('user', $user, {'ensure' => 'present', 'shell' => '/bin/bash'})
-    ensure_resource('file', "/Users/${user}", {'ensure' => 'directory', 'owner' => $user, 'group' => $group, 'mode' => '0755', 'require' => [User[$user], Group[$group]]})
+  file { $homebrew_directories:
+    ensure  => directory,
+    owner   => $user,
+    group   => $group,
+    mode    => '0775',
+    require => Package[$xcode_cli_install],
   }
-
-  file {$homebrew_directories:
-    ensure  => directory,
-    owner   => $homebrew::user,
-    group   => $homebrew::group,
-    mode    => '0775',
-    require => Group[$group],
-  } ->
-
-  file {'/usr/local':
-    ensure  => directory,
-    owner   => $homebrew::user,
-    group   => $homebrew::group,
-    mode    => '0775',
-    require => Group[$group],
-  } ->
-
-  exec {'install-homebrew':
+  -> exec {'install-homebrew':
     cwd       => '/usr/local',
-    command   => "/usr/bin/su ${homebrew::user} -c '/bin/bash -o pipefail -c \"/usr/bin/curl -skSfL https://github.com/mxcl/homebrew/tarball/master | /usr/bin/tar xz -m --strip 1\"'",
-    creates   => '/usr/local/bin/brew',
-    logoutput => on_failure,
-    timeout   => 0,
-    require   => File['/etc/profile.d/homebrew.sh'],
+    command   => "/usr/bin/curl -skSfL https://github.com/Homebrew/brew/tarball/master | /usr/bin/tar xz -m --strip 1 -C /usr/local/Homebrew",
+    creates   => '/usr/local/Homebrew/bin/brew',
+    user      => $user,
+  }
+  -> file { '/usr/local/bin/brew':
+    ensure  => 'link',
+    force   => true,
+    owner   => $user,
+    group   => $group,
+    target  => '/usr/local/Homebrew/bin/brew',
+    require => Exec['install-homebrew'],
+  }
+  group {$group:
+    ensure => present,
+    name   => $group,
   }
 
   if (! defined(File['/etc/profile.d']))
@@ -186,61 +171,14 @@ class homebrew (
   {
     Package[$xcode_cli_install] -> Exec['install-homebrew']
   }
-
-  file { '/usr/local/bin/brew':
-    owner   => $homebrew::user,
-    group   => $homebrew::group,
-    mode    => '0775',
-    require => Exec['install-homebrew'],
-  }
-
-  case $update_every
-  {
-    'default', true, present:
-    { # By default we update brew every day at 02:07A (odd time on purpose)
-      $cron_ensure    = present
-      $cron_minute    = '7'
-      $cron_hour      = '2'
-      $cron_monthday  = absent
-      $cron_month     = absent
-      $cron_weekday   = absent
-    }
-    'never', false, absent:
-    {
-      $cron_ensure    = absent
-      $cron_minute    = absent
-      $cron_hour      = absent
-      $cron_monthday  = absent
-      $cron_month     = absent
-      $cron_weekday   = absent
-    }
-    default:
-    {
-      $frequencies    = split($update_every, ':')
-      $cron_ensure    = present
-      $cron_minute    = $frequencies[0]
-      $cron_hour      = size($frequencies) ? { /(1|2|3|4)/ => $frequencies[1], default => absent }
-      $cron_monthday  = size($frequencies) ? { /(2|3|4)/   => $frequencies[2], default => absent }
-      $cron_month     = size($frequencies) ? { /(3|4)/     => $frequencies[3], default => absent }
-      $cron_weekday   = size($frequencies) ? { /4/         => $frequencies[4], default => absent }
-    }
-  }
-
   cron {'cron-update-brew':
     ensure      => $cron_ensure,
     command     => '/usr/local/bin/brew update 2>&1 >> /Library/Logs/Homebrew/cron-update-brew.log',
     environment => ['HOMEBREW_CACHE=/Library/Caches/Homebrew', 'HOMEBREW_LOGS=/Library/Logs/Homebrew/'],
     user        => root,
-    minute      => $cron_minute,
-    hour        => $cron_hour,
-    monthday    => $cron_monthday,
-    month       => $cron_month,
-    weekday     => $cron_weekday,
+    minute      => 0,
+    hour        => 23,
     require     => Exec['install-homebrew'],
-  }
-
-  if $install_packages {
-    include homebrew::packages
   }
 
 }
