@@ -104,6 +104,12 @@ class homebrew (
         provider => pkgdmg,
         source   => $xcode_cli_source,
       }
+      -> exec {'accept-xcode':
+        cwd         => '/tmp',
+        command     => '/usr/bin/xcodebuild -license accept',
+        refreshonly => true,
+      }
+
     }
   }
 
