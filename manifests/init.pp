@@ -128,6 +128,7 @@ class homebrew (
     '/usr/local/Library',
     '/usr/local/sbin',
     '/usr/local/share',
+    '/usr/local/share/doc',
     '/usr/local/var',
     '/usr/local/var/log',
     '/usr/local/var/homebrew',
