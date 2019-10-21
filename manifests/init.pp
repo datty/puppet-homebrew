@@ -132,6 +132,8 @@ class homebrew (
     '/usr/local/var',
     '/usr/local/var/log',
     '/usr/local/var/homebrew',
+    '/usr/local/share/man',
+    '/usr/local/share/man/man1',
   ]
   file { $homebrew_directories:
     ensure  => directory,
